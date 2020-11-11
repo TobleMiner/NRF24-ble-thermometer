@@ -319,7 +319,7 @@ static void ble_tx(void *ctx) {
 	gpiod_set(GPIO_LED_BLE, 0);
 	ce_lo();
 
-	while (!nrf_get_status() & 0x20) {
+	while (!(nrf_get_status() & 0x20)) {
 		os_delay(MS_TO_US(10));
 	}
 	nrf_register_write(NRF_REG_CONFIG, 0x00); // crc disabled, powered down, ptx
@@ -335,6 +335,7 @@ int main(void) {
 	sht_off();
 	os_delay(MS_TO_US(1000));
 	nrf_on();
+	os_delay(MS_TO_US(100));
 	nrf_ble_setup();
 	os_delay(MS_TO_US(100));
 	i2c_init();
