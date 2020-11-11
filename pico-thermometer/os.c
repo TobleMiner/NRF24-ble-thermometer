@@ -252,29 +252,32 @@ void os_run() {
 	last_run_timer_counter = ticks_now;
 }
 
-static void os_delay_slowpath(uint32_t us) {
-	os_time_t deadline;
+static void os_delay_ticks(uint32_t ticks_now, uint32_t ticks) {
+	uint32_t ticks_then = ticks_now + ticks;
 
-	os_sync_time();
-	deadline = last_os_time;
-	time_add_us(&deadline, us);
-	while (TIME_GE(deadline, last_os_time)) {
-		os_sync_time();
+	timer_set_compare(ticks_then);
+	while (!timer_elapsed) {
+		do_sleep(TICKS_TO_US(ticks));
 	}
 }
 
 void os_delay(uint32_t us) {
-	uint32_t ticks_now = lptimer_get_counter(OS_TIMER);
 	uint32_t ticks = US_TO_TICKS(us);
-	if (OS_TIMER_TOP <= ticks ||
-	    OS_TIMER_TOP - ticks < ticks_now) {
-		os_delay_slowpath(us);
-	} else {
-		uint32_t ticks_then = ticks_now + ticks;
 
-		timer_set_compare(ticks_then);
-		while (!timer_elapsed) {
-			do_sleep(us);
+	while (ticks) {
+		uint32_t ticks_now = lptimer_get_counter(OS_TIMER);
+		uint32_t ticks_partial = ticks;
+
+		if (ticks_partial >= OS_TIMER_TOP) {
+			ticks_partial = OS_TIMER_TOP - 1;
 		}
+		if (OS_TIMER_TOP - ticks_partial < ticks_now) {
+			ticks_partial =  OS_TIMER_TOP - ticks_now;
+		}
+
+		os_delay_ticks(ticks_now, ticks_partial);
+
+		ticks -= ticks_partial;
+		os_sync_time();
 	}
 }
