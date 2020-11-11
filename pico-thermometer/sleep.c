@@ -17,6 +17,7 @@ void sleep_enter_low_power(void) {
 void sleep_enter_stop(void) {
 	SCB_SCR |= SCB_SCR_SLEEPDEEP;
 	PWR_CR &= ~PWR_CR_PDDS;
+	PWR_CR |= PWR_CR_ULP | PWR_CR_LPDS;
 	PWR_CSR &= ~PWR_CSR_WUF;
 	WFI();
 }
