@@ -257,7 +257,7 @@ static unsigned milli_to_decimal_str(char *str, unsigned max_len, long val) {
 	*str++ = '.';
 	len++;
 	max_len--;
-	len += long_to_str(str, max_len, val < 0 ? (1000 - val % 1000) : val % 1000, 2);
+	len += long_to_str(str, max_len, (val < 0 ? (1000 - val % 1000) : val % 1000) / 10, 2);
 
 	return len;
 }
