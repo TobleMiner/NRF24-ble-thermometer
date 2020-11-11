@@ -1,5 +1,6 @@
 #pragma once
 
+#include <stdbool.h>
 #include <stdint.h>
 
 #include "os_time.h"
@@ -26,3 +27,4 @@ void os_init(void);
 void os_schedule_task_relative(os_task_t *task, os_task_f cb, uint32_t us, void *ctx);
 void os_run(void);
 void os_delay(uint32_t us);
+void os_inhibit_deep_sleep(bool inhibit);

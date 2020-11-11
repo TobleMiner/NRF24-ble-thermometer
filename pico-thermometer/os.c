@@ -3,8 +3,10 @@
 #include <libopencm3/cm3/nvic.h>
 #include <libopencm3/stm32/lptimer.h>
 #include <libopencm3/stm32/rcc.h>
+#include <libopencmsis/core_cm3.h>
 
 #include "os.h"
+#include "sleep.h"
 
 #define OS_TIMER LPTIM1
 #define OS_TIMER_RCC RCC_LPTIM1
@@ -14,12 +16,34 @@
 #define OS_TIMER_IRQ_HANDLER lptim1_isr
 #define OS_TIMER_TOP 0xFFFF
 
+#define OS_SLEEP_THRESHOLD_LOW_POWER_US 1000
+#define OS_SLEEP_THRESHOLD_STOP_US     10000
+
 static uint32_t last_timer_counter_sync = 0;
 static os_time_t last_os_time = { 0, 0 };
 static uint32_t next_task_timer_counter = 0;
 static uint32_t last_run_timer_counter = 0;
 
 static os_task_t *os_tasks;
+static os_task_t *next_task;
+
+static bool inhibit_deep_sleep = false;
+
+void os_inhibit_deep_sleep(bool inhibit) {
+	inhibit_deep_sleep = inhibit;
+}
+
+static void do_sleep(uint32_t us) {
+	if (us >= OS_SLEEP_THRESHOLD_STOP_US && !inhibit_deep_sleep) {
+		sleep_enter_stop();
+/*
+	} else if (us >= OS_SLEEP_THRESHOLD_LOW_POWER_US) {
+		sleep_enter_low_power();
+*/
+	} else {
+		sleep_enter();
+	}
+}
 
 void os_init() {
 	// 1ms resolution RTOS timer
@@ -32,9 +56,17 @@ void os_init() {
 	lptimer_set_prescaler(OS_TIMER, LPTIM_CFGR_PRESC_32);
 	lptimer_enable(OS_TIMER);
 	lptimer_set_period(OS_TIMER, OS_TIMER_TOP);
-//	lptimer_enable_irq(OS_TIMER, LPTIM_IER_ARRMIE | LPTIM_IER_CMPMIE);
-//	nvic_enable_irq(NVIC_LPTIM1_IRQ);
+	lptimer_enable_irq(OS_TIMER, LPTIM_IER_ARRMIE | LPTIM_IER_CMPMIE);
+	nvic_enable_irq(NVIC_LPTIM1_IRQ);
 	lptimer_start_counter(OS_TIMER, LPTIM_CR_CNTSTRT);
+}
+
+static volatile bool timer_elapsed = false;
+
+void OS_TIMER_IRQ_HANDLER(void) {
+	lptimer_clear_flag(OS_TIMER, LPTIM_ICR_ARRMCF);
+	lptimer_clear_flag(OS_TIMER, LPTIM_ICR_CMPMCF);
+	timer_elapsed = true;
 }
 
 static void os_sync_time(void) {
@@ -99,6 +131,7 @@ static void os_recalculate_next_deadline(void) {
 	}
 
 	next_task_timer_counter = ticks_now + delta_ticks;
+	next_task = os_tasks;
 }
 
 static void os_remove_task(os_task_t *removee) {
@@ -113,6 +146,9 @@ static void os_remove_task(os_task_t *removee) {
 			}
 			task = task->next;
 		}
+	}
+	if (next_task == removee) {
+		next_task = NULL;
 	}
 	removee->next = NULL;
 }
@@ -160,6 +196,23 @@ void os_schedule_task_relative(os_task_t *task, os_task_f cb, uint32_t us, void 
 	os_recalculate_next_deadline();
 }
 
+/*
+ * Setting up the timer compare match is a complicated procedure.
+ * First of all writes to the compare register are async. They are synchronized
+ * to the timer clock. Thus we need to wait before evaluating the counter
+ * in relation to the compare value.
+ * Additionally interrupts need to be disabled during evaluation to ensure we
+ * did not miss the compare event.
+ */
+static void timer_set_compare(uint16_t val) {
+	__disable_irq();
+	lptimer_clear_flag(OS_TIMER, LPTIM_ICR_CMPOKCF);
+	lptimer_set_compare(OS_TIMER, val);
+	while (!lptimer_get_flag(OS_TIMER, LPTIM_ICR_CMPOKCF));
+	timer_elapsed = lptimer_get_counter(OS_TIMER) >= val;
+	__enable_irq();
+}
+
 void os_run() {
 	uint32_t ticks_now = lptimer_get_counter(OS_TIMER);
 	os_task_t *task = os_tasks;
@@ -169,10 +222,14 @@ void os_run() {
 		// Fast path
 		if (ticks_now < next_task_timer_counter) {
 			last_run_timer_counter = ticks_now;
+			timer_set_compare(next_task_timer_counter);
+			while (!timer_elapsed) {
+				do_sleep(next_task_timer_counter - ticks_now);
+			}
 			return;
 		} else {
 			// Ensure minimum latency by executing deadline task first
-			if (task) {
+			if (next_task) {
 				os_remove_task(task);
 				task->run(task->ctx);
 			}
@@ -214,9 +271,10 @@ void os_delay(uint32_t us) {
 		os_delay_slowpath(us);
 	} else {
 		uint32_t ticks_then = ticks_now + ticks;
-		while (lptimer_get_counter(OS_TIMER) < ticks_then) {
-			// depend on ticks_then to make absolutely sure this not optimzed out
-			__asm__ volatile("" : "+g" (ticks_then) : :);
+
+		timer_set_compare(ticks_then);
+		while (!timer_elapsed) {
+			do_sleep(us);
 		}
 	}
 }

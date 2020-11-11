@@ -21,6 +21,7 @@
 #define NRF_CMD_READ_REGISTER    0x00
 #define NRF_CMD_WRITE_REGISTER   0x20
 #define NRF_CMD_WRITE_TX_PAYLOAD 0xa0
+#define NRF_CMD_REUSE_TX_PAYLOAD 0xe3
 #define NRF_CMD_NOP              0xff
 
 #define NRF_REG_CONFIG           0x00
@@ -35,6 +36,7 @@
 #define NRF_REG_RX_ADDR_P0       0x0A
 #define NRF_REG_TX_ADDR          0x10
 #define NRF_REG_RX_PW_P0         0x11
+#define NRF_REG_FIFO_STATUS      0x17
 #define NRF_REG_DYNPD            0x1C
 #define NRF_REG_FEATURE          0x1D
 
@@ -66,6 +68,7 @@ static const struct rcc_clock_scale clock_32MHz = {
 
 static void clock_init(void) {
 	rcc_clock_setup_pll(&clock_32MHz);
+	RCC_CFGR |= RCC_CFGR_STOPWUCK_HSI16;
 }
 
 static void spi_init(void) {
@@ -174,6 +177,10 @@ static void nrf_cmd_multibyte(uint8_t cmd, uint8_t *data, uint8_t len) {
 	gpiod_set(GPIO_SPI_NSS, 0);
 }
 
+static void nrf_cmd(uint8_t cmd) {
+	nrf_cmd_multibyte(cmd, NULL, 0);
+}
+
 static uint8_t nrf_get_status(void) {
 	uint8_t status;
 
@@ -185,7 +192,7 @@ static uint8_t nrf_get_status(void) {
 }
 
 static void nrf_ble_setup(void) {
-	nrf_register_write(NRF_REG_CONFIG, 0x02); // crc disabled, powered up, ptx
+	nrf_register_write(NRF_REG_CONFIG, 0x00); // crc disabled, powered down, ptx
 	nrf_register_write(NRF_REG_EN_AA, 0x00); // Disable auto ack
 	nrf_register_write(NRF_REG_RX_PW_P0, 0x20); // Enable RX pipe 0
 	nrf_register_write(NRF_REG_EN_RXADDR, 0x01); // Enable RX 0
@@ -220,14 +227,23 @@ uint32_t m_perc_rh;
 os_task_t measure_task;
 os_task_t tx_task;
 
+static bool data_updated = false;
+
 static void measure(void *ctx);
 static void measure(void *ctx) {
 	os_schedule_task_relative(&measure_task, measure, MS_TO_US(MEASURE_INTERVAL_MS), NULL);
+
+	sht_on();
+	os_delay(MS_TO_US(100));
 
 	gpiod_set(GPIO_LED_SHT, 1);
 	mdeg_c = sht_read_temperature_mdeg();
 	m_perc_rh = sht_read_humidity_m_perc();
 	gpiod_set(GPIO_LED_SHT, 0);
+
+	sht_off();
+
+	data_updated = true;
 }
 
 static void ble_tx(void *ctx);
@@ -239,30 +255,40 @@ static void ble_tx(void *ctx) {
 
 	os_schedule_task_relative(&tx_task, ble_tx, MS_TO_US(BEACON_INTERVAL_MS), NULL);
 
-//	msg[0] = snprintf(msg + 2, sizeof(msg) - 2, "%ld.%02ld°C %02lu.%02lu", mdeg_c / 1000, mdeg_c < 0 ? 1000 - mdeg_c % 1000 : mdeg_c % 1000, m_perc_rh / 1000, m_perc_rh % 1000) + 1;
-//	msg[0] = snprintf(msg + 2, sizeof(msg) - 2, "miau :3") + 1;
-	msg[0] = snprintf(msg + 2, sizeof(msg) - 2, "%ld.%02ld°C %02u.%02u%%RH", mdeg_c / 1000, mdeg_c < 0 ? (1000 - mdeg_c % 1000) / 10 : (mdeg_c % 1000) / 10, m_perc_rh / 1000, (m_perc_rh % 1000) / 10) + 1;
-	msg[1] = 0x09;
+	nrf_register_write(NRF_REG_CONFIG, 0x02); // crc disabled, powered up, ptx
+	os_delay(MS_TO_US(10));
 
-	channel = ble_get_advertisement_channel();
+	if (data_updated) {
+		data_updated = false;
+	//	msg[0] = snprintf(msg + 2, sizeof(msg) - 2, "%ld.%02ld°C %02lu.%02lu", mdeg_c / 1000, mdeg_c < 0 ? 1000 - mdeg_c % 1000 : mdeg_c % 1000, m_perc_rh / 1000, m_perc_rh % 1000) + 1;
+	//	msg[0] = snprintf(msg + 2, sizeof(msg) - 2, "miau :3") + 1;
+		msg[0] = snprintf(msg + 2, sizeof(msg) - 2, "%ld.%02ld°C %02u.%02u%%RH", mdeg_c / 1000, mdeg_c < 0 ? (1000 - mdeg_c % 1000) / 10 : (mdeg_c % 1000) / 10, m_perc_rh / 1000, (m_perc_rh % 1000) / 10) + 1;
+		msg[1] = 0x09;
 
-	nrf_register_write(NRF_REG_RF_CH, channel->frequency_mhz - 2400);
-	len = ble_frame(frame, sizeof(frame), hdr, mac_address, msg, msg[0] + 2, channel);
+		channel = ble_get_advertisement_channel();
 
-	nrf_register_write(NRF_REG_STATUS, 0x70); // Clear flags
-	nrf_cmd_multibyte(NRF_CMD_WRITE_TX_PAYLOAD, frame, len);
+		nrf_register_write(NRF_REG_RF_CH, channel->frequency_mhz - 2400);
+		len = ble_frame(frame, sizeof(frame), hdr, mac_address, msg, msg[0] + 2, channel);
+
+		nrf_register_write(NRF_REG_STATUS, 0x70); // Clear flags
+		nrf_cmd_multibyte(NRF_CMD_WRITE_TX_PAYLOAD, frame, len);
+	} else {
+		nrf_cmd(NRF_CMD_REUSE_TX_PAYLOAD); // Reuse last tx payload
+	}
+
 	ce_hi();
-
 	gpiod_set(GPIO_LED_BLE, 1);
 	os_delay(MS_TO_US(1));
 	gpiod_set(GPIO_LED_BLE, 0);
 	ce_lo();
+
+	while (!nrf_get_status() & 0x20) {
+		os_delay(MS_TO_US(10));
+	}
+	nrf_register_write(NRF_REG_CONFIG, 0x00); // crc disabled, powered down, ptx
 }
 
 int main(void) {
-	uint32_t i;
-	uint8_t val = 1;
-
 	clock_init();
 	gpiod_init();
 	os_init();
@@ -272,8 +298,6 @@ int main(void) {
 	sht_off();
 	os_delay(MS_TO_US(1000));
 	nrf_on();
-	sht_on();
-	os_delay(MS_TO_US(100));
 	nrf_ble_setup();
 	os_delay(MS_TO_US(100));
 	i2c_init();
@@ -289,3 +313,4 @@ int main(void) {
 
 	return 0;
 }
+
