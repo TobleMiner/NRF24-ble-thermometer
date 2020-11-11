@@ -224,7 +224,7 @@ void os_run() {
 			last_run_timer_counter = ticks_now;
 			timer_set_compare(next_task_timer_counter);
 			while (!timer_elapsed) {
-				do_sleep(next_task_timer_counter - ticks_now);
+				do_sleep(TICKS_TO_US(next_task_timer_counter - ticks_now));
 			}
 			return;
 		} else {
