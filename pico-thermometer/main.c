@@ -16,6 +16,7 @@
 #include "gpiod.h"
 #include "os.h"
 #include "os_time.h"
+#include "strutil.h"
 #include "util.h"
 
 #define NRF_CMD_READ_REGISTER    0x00
@@ -246,6 +247,41 @@ static void measure(void *ctx) {
 	data_updated = true;
 }
 
+static unsigned milli_to_decimal_str(char *str, unsigned max_len, long val) {
+	unsigned i, len = 0;
+
+	i = long_to_str(str, max_len, val / 1000, 2);
+	str += i;
+	len += i;
+	max_len -= i;
+	*str++ = '.';
+	len++;
+	max_len--;
+	len += long_to_str(str, max_len, val < 0 ? (1000 - val % 1000) : val % 1000, 2);
+
+	return len;
+}
+
+static unsigned build_complete_local_name(char *str, unsigned len) {
+	char *str_start = str;
+	int i;
+
+	i = milli_to_decimal_str(str, len, mdeg_c);
+	len -= i;
+	str += i;
+	strncpy(str, "°C ", len);
+	len -= 3;
+	str += 3;
+	i = milli_to_decimal_str(str, len, m_perc_rh);
+	len -= i;
+	str += i;
+	strncpy(str, "%RH", len);
+	len -= 3;
+	str += 3;
+
+	return str - str_start;
+}
+
 static void ble_tx(void *ctx);
 static void ble_tx(void *ctx) {
 	uint8_t frame[32] = { 0 };
@@ -262,7 +298,8 @@ static void ble_tx(void *ctx) {
 		data_updated = false;
 	//	msg[0] = snprintf(msg + 2, sizeof(msg) - 2, "%ld.%02ld°C %02lu.%02lu", mdeg_c / 1000, mdeg_c < 0 ? 1000 - mdeg_c % 1000 : mdeg_c % 1000, m_perc_rh / 1000, m_perc_rh % 1000) + 1;
 	//	msg[0] = snprintf(msg + 2, sizeof(msg) - 2, "miau :3") + 1;
-		msg[0] = snprintf(msg + 2, sizeof(msg) - 2, "%ld.%02ld°C %02u.%02u%%RH", mdeg_c / 1000, mdeg_c < 0 ? (1000 - mdeg_c % 1000) / 10 : (mdeg_c % 1000) / 10, m_perc_rh / 1000, (m_perc_rh % 1000) / 10) + 1;
+	//	msg[0] = snprintf(msg + 2, sizeof(msg) - 2, "%ld.%02ld°C %02u.%02u%%RH", mdeg_c / 1000, mdeg_c < 0 ? (1000 - mdeg_c % 1000) / 10 : (mdeg_c % 1000) / 10, m_perc_rh / 1000, (m_perc_rh % 1000) / 10) + 1;
+		msg[0] = build_complete_local_name(msg + 2, sizeof(msg) - 2) + 1;
 		msg[1] = 0x09;
 
 		channel = ble_get_advertisement_channel();
