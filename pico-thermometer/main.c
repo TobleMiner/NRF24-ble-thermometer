@@ -270,8 +270,8 @@ static unsigned build_complete_local_name(char *str, unsigned len) {
 	len -= i;
 	str += i;
 	strncpy(str, "°C ", len);
-	len -= 3;
-	str += 3;
+	len -= 4; // UTF-8 ° is two bytes
+	str += 4;
 	i = milli_to_decimal_str(str, len, m_perc_rh);
 	len -= i;
 	str += i;
