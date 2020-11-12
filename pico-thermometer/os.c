@@ -281,3 +281,45 @@ void os_delay(uint32_t us) {
 		os_sync_time();
 	}
 }
+
+uint32_t os_wait_flag_timeout(uint32_t *mmio, uint32_t mask, uint32_t us) {
+	uint32_t ticks = US_TO_TICKS(us);
+
+	while (ticks) {
+		uint32_t ticks_now = lptimer_get_counter(OS_TIMER);
+		uint32_t ticks_partial = ticks;
+		uint32_t ticks_then;
+		uint32_t flags;
+
+		if (ticks_partial >= OS_TIMER_TOP) {
+			ticks_partial = OS_TIMER_TOP - 1;
+		}
+		if (OS_TIMER_TOP - ticks_partial < ticks_now) {
+			ticks_partial =  OS_TIMER_TOP - ticks_now;
+		}
+
+		ticks_then = ticks_now + ticks_partial;
+
+		timer_set_compare(ticks_then);
+		while (!timer_elapsed) {
+			sleep_enter_event();
+
+			flags = *mmio & mask;
+			if (flags) {
+				return flags;
+			}
+
+		}
+
+		os_sync_time();
+
+		flags = *mmio & mask;
+		if (flags) {
+			return flags;
+		}
+
+		ticks -= ticks_partial;
+	}
+
+	return 0;
+}
