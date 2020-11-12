@@ -7,7 +7,7 @@
 #define CRC_POLY ((BITSWAP_U8(0x5B) << 16) | (BITSWAP_U8(0x06) << 8))
 
 ble_channel_t ble_advertisement_channels[] = {
-	{ 37, 2402 }, { 38, 2426 }, { 39, 2489 }
+	{ 37, 2402 }, { 38, 2426 }, { 39, 2480 }
 };
 
 // Efficient LSB first BLE crc
@@ -78,7 +78,6 @@ static int adv_idx = 0;
 
 ble_channel_t *ble_get_advertisement_channel() {
 	adv_idx %= ARRAY_SIZE(ble_advertisement_channels);
-	adv_idx = 0;
 	return &ble_advertisement_channels[adv_idx++];
 }
 
