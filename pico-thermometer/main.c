@@ -9,6 +9,7 @@
 #include <libopencm3/stm32/flash.h>
 #include <libopencm3/stm32/gpio.h>
 #include <libopencm3/stm32/i2c.h>
+#include <libopencm3/stm32/iwdg.h>
 #include <libopencm3/stm32/rcc.h>
 #include <libopencm3/stm32/spi.h>
 
@@ -53,6 +54,8 @@
 #define MEASURE_INTERVAL_MS 30000
 #define BEACON_INTERVAL_MS 1000
 
+#define WATCHDOG_INTERVAL_MS 10000
+
 const char *device_name = "";
 
 static const struct rcc_clock_scale clock_32MHz = {
@@ -73,6 +76,11 @@ static const struct rcc_clock_scale clock_32MHz = {
 static void clock_init(void) {
 	rcc_clock_setup_pll(&clock_32MHz);
 	RCC_CFGR |= RCC_CFGR_STOPWUCK_HSI16;
+}
+
+static void watchdog_init(void) {
+	iwdg_set_period_ms(WATCHDOG_INTERVAL_MS);
+	iwdg_start();
 }
 
 static void spi_init(void) {
@@ -373,6 +381,7 @@ static void ble_tx(void *ctx) {
 }
 
 int main(void) {
+	watchdog_init();
 	clock_init();
 	gpiod_init();
 	os_init();
@@ -390,6 +399,7 @@ int main(void) {
 
 	while(1) {
 		os_run();
+		iwdg_reset();
 	}
 
 	return 0;
