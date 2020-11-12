@@ -277,8 +277,11 @@ void os_delay(uint32_t us) {
 
 		os_delay_ticks(ticks_now, ticks_partial);
 
+		if (ticks_now < last_timer_counter_sync) {
+			os_sync_time();
+		}
+
 		ticks -= ticks_partial;
-		os_sync_time();
 	}
 }
 
@@ -311,7 +314,9 @@ uint32_t os_wait_flag_timeout(uint32_t *mmio, uint32_t mask, uint32_t us) {
 
 		}
 
-		os_sync_time();
+		if (ticks_now < last_timer_counter_sync) {
+			os_sync_time();
+		}
 
 		flags = *mmio & mask;
 		if (flags) {
