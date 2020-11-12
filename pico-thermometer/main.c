@@ -118,7 +118,7 @@ static int sht_read_temperature_mdeg(int32_t *ret) {
 
 	sht_cmd(SHT_CMD_MEASURE_TEMPERATURE);
 	os_delay(MS_TO_US(100));
-	err = i2c_transfer(I2C1, SHT_ADDRESS, NULL, 0, &res, 2);
+	err = i2c_transfer(I2C1, SHT_ADDRESS, NULL, 0, (uint8_t*)&res, 2);
 	if (err < 0) {
 		return err;
 	}
@@ -127,13 +127,13 @@ static int sht_read_temperature_mdeg(int32_t *ret) {
 	return 0;
 }
 
-static uint32_t sht_read_humidity_m_perc(uint32_t *ret) {
+static int sht_read_humidity_m_perc(uint32_t *ret) {
 	uint16_t res;
 	int err;
 
 	sht_cmd(SHT_CMD_MEASURE_HUMIDITY);
 	os_delay(MS_TO_US(100));
-	err = i2c_transfer(I2C1, SHT_ADDRESS, NULL, 0, &res, 2);
+	err = i2c_transfer(I2C1, SHT_ADDRESS, NULL, 0, (uint8_t*)&res, 2);
 	if (err < 0) {
 		return err;
 	}
@@ -226,6 +226,8 @@ static bool data_updated = false;
 
 static void measure(void *ctx);
 static void measure(void *ctx) {
+	(void)ctx;
+
 	os_schedule_task_relative(&measure_task, measure, MS_TO_US(MEASURE_INTERVAL_MS), NULL);
 
 	sht_on();
@@ -247,7 +249,7 @@ static void measure(void *ctx) {
 	data_updated = true;
 }
 
-static bool str_write(char **str, unsigned *len, void *data, unsigned data_len) {
+static bool str_write(char **str, unsigned *len, const void *data, unsigned data_len) {
 	if (*len < data_len) {
 		return false;
 	}
@@ -259,7 +261,7 @@ static bool str_write(char **str, unsigned *len, void *data, unsigned data_len) 
 	return true;
 }
 
-static bool str_write_str(char **str, unsigned *len, char *data) {
+static bool str_write_str(char **str, unsigned *len, const char *data) {
 	return str_write(str, len, data, strlen(data));
 }
 
@@ -325,10 +327,12 @@ static void nrf_reset(void) {
 static void ble_tx(void *ctx);
 static void ble_tx(void *ctx) {
 	uint8_t frame[32] = { 0 };
-	char msg[32];
+	uint8_t msg[32];
 	ble_channel_t* channel;
 	uint16_t len;
 	unsigned status_polls = 0;
+
+	(void)ctx;
 
 	os_schedule_task_relative(&tx_task, ble_tx, MS_TO_US(BEACON_INTERVAL_MS), NULL);
 
@@ -340,7 +344,7 @@ static void ble_tx(void *ctx) {
 
 	if (data_updated) {
 		data_updated = false;
-		msg[0] = build_complete_local_name(msg + 2, sizeof(msg) - 2) + 1;
+		msg[0] = build_complete_local_name((char*)msg + 2, sizeof(msg) - 2) + 1;
 		msg[1] = 0x09;
 
 		len = ble_frame(frame, sizeof(frame), hdr, mac_address, msg, msg[0] + 2, channel);
@@ -390,4 +394,3 @@ int main(void) {
 
 	return 0;
 }
-
