@@ -312,14 +312,28 @@ static int build_complete_local_name(char *str, unsigned len) {
 	return str - str_start;
 }
 
+static void nrf_reset(void) {
+	nrf_off();
+	os_delay(MS_TO_US(1000));
+	nrf_on();
+	os_delay(MS_TO_US(100));
+	nrf_ble_setup();
+}
+
+#define MAX_STATUS_POLLS 10
+
 static void ble_tx(void *ctx);
 static void ble_tx(void *ctx) {
 	uint8_t frame[32] = { 0 };
 	char msg[32];
 	ble_channel_t* channel;
 	uint16_t len;
+	unsigned status_polls = 0;
 
 	os_schedule_task_relative(&tx_task, ble_tx, MS_TO_US(BEACON_INTERVAL_MS), NULL);
+
+	channel = ble_get_advertisement_channel();
+	nrf_register_write(NRF_REG_RF_CH, channel->frequency_mhz - 2400);
 
 	nrf_register_write(NRF_REG_CONFIG, 0x02); // crc disabled, powered up, ptx
 	os_delay(MS_TO_US(10));
@@ -329,9 +343,6 @@ static void ble_tx(void *ctx) {
 		msg[0] = build_complete_local_name(msg + 2, sizeof(msg) - 2) + 1;
 		msg[1] = 0x09;
 
-		channel = ble_get_advertisement_channel();
-
-		nrf_register_write(NRF_REG_RF_CH, channel->frequency_mhz - 2400);
 		len = ble_frame(frame, sizeof(frame), hdr, mac_address, msg, msg[0] + 2, channel);
 
 		nrf_register_write(NRF_REG_STATUS, 0x70); // Clear flags
@@ -347,6 +358,11 @@ static void ble_tx(void *ctx) {
 	ce_lo();
 
 	while (!(nrf_get_status() & 0x20)) {
+		status_polls++;
+		if (status_polls >= MAX_STATUS_POLLS) {
+			nrf_reset();
+			break;
+		}
 		os_delay(MS_TO_US(10));
 	}
 	nrf_register_write(NRF_REG_CONFIG, 0x00); // crc disabled, powered down, ptx
@@ -358,14 +374,10 @@ int main(void) {
 	os_init();
 	spi_init();
 	ce_lo();
-	nrf_off();
 	sht_off();
-	os_delay(MS_TO_US(1000));
-	nrf_on();
-	os_delay(MS_TO_US(100));
-	nrf_ble_setup();
-	os_delay(MS_TO_US(100));
 	i2c_init();
+
+	nrf_reset();
 
 	os_delay(MS_TO_US(1000));
 
