@@ -10,6 +10,11 @@ void sleep_enter(void) {
 	WFI();
 }
 
+void sleep_enter_event(void) {
+	SCB_SCR &= ~SCB_SCR_SLEEPDEEP;
+	WFE();
+}
+
 void sleep_enter_low_power(void) {
 	sleep_enter();
 }
