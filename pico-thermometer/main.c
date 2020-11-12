@@ -97,9 +97,6 @@ static void sht_off(void) {
 }
 
 static void i2c_init(void) {
-//	nvic_set_priority(NVIC_I2C1_IRQ, 0);
-//	nvic_enable_irq(NVIC_I2C1_IRQ);
-
 	rcc_periph_clock_enable(RCC_I2C1);
 
 	i2c_reset(I2C1);
@@ -113,7 +110,6 @@ static void i2c_init(void) {
 
 static int sht_cmd(uint8_t cmd) {
 	return i2c_transfer(I2C1, SHT_ADDRESS, &cmd, 1, NULL, 0);
-//	i2c_transfer7(I2C1, SHT_ADDRESS, &cmd, 1, NULL, 0);	
 }
 
 static int sht_read_temperature_mdeg(int32_t *ret) {
@@ -126,7 +122,6 @@ static int sht_read_temperature_mdeg(int32_t *ret) {
 	if (err < 0) {
 		return err;
 	}
-//	i2c_transfer7(I2C1, SHT_ADDRESS, NULL, 0, &res, 2);
 	res = ((res & 0xff) << 8) | ((res & 0xff00) >> 8);
 	*ret = (175720LL * (int64_t)res) / 65536LL - 46850LL;
 	return 0;
@@ -142,7 +137,6 @@ static uint32_t sht_read_humidity_m_perc(uint32_t *ret) {
 	if (err < 0) {
 		return err;
 	}
-//	i2c_transfer7(I2C1, SHT_ADDRESS, NULL, 0, &res, 2);
 	res = ((res & 0xff) << 8) | ((res & 0xff00) >> 8);
 	*ret = (125000ULL * (uint64_t)res) / 65536ULL - 6000ULL;
 	return 0;
@@ -218,18 +212,6 @@ static void nrf_ble_setup(void) {
 	nrf_cmd_multibyte(NRF_CMD_WRITE_REGISTER | NRF_REG_TX_ADDR, *ble_get_access_address(), sizeof(ble_access_address_t)); // Set TX address
 }
 
-/*
-static uint8_t msg[] = {
-	0x07,
-	0x09,
-	'N',
-	'R',
-	'F',
-	'2',
-	'4',
-	'L',
-};
-*/
 static uint8_t hdr = BLE_HEADER(BLE_PDU_TYPE_ADV_NONCONN_IND, 0, 1, 0);
 
 static ble_mac_address_t mac_address = { 0x37, 0x13, 0xb7, 0x41, 0x80, 0x00 };
