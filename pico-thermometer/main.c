@@ -265,40 +265,67 @@ static void measure(void *ctx) {
 	data_updated = true;
 }
 
-static unsigned milli_to_decimal_str(char *str, unsigned max_len, long val) {
-	unsigned i, len = 0;
+static bool str_write(char **str, unsigned *len, void *data, unsigned data_len) {
+	if (*len < data_len) {
+		return false;
+	}
 
-	i = long_to_str(str, max_len, val / 1000, 2);
-	str += i;
-	len += i;
-	max_len -= i;
-	*str++ = '.';
-	len++;
-	max_len--;
-	len += long_to_str(str, max_len, (val < 0 ? (1000 - val % 1000) : val % 1000) / 100, 2);
+	memcpy(*str, data, data_len);
+	*str += data_len;
+	*len -= data_len;
 
-	return len;
+	return true;
 }
 
-static unsigned build_complete_local_name(char *str, unsigned len) {
+static bool str_write_str(char **str, unsigned *len, char *data) {
+	return str_write(str, len, data, strlen(data));
+}
+
+static int milli_to_decimal_str(char **str, unsigned *len, long val) {
+	unsigned i;
+	char *str_start = *str;
+
+	i = long_to_str(*str, *len, val / 1000, 0);
+	if (i > *len) {
+		return -1;
+	}
+	*str += i;
+	*len -= i;
+	if (!*len) {
+		return -1;
+	}
+	**str = '.';
+	(*str)++;
+	(*len)--;
+	i = long_to_str(*str, *len, (val < 0 ? (1000 - val % 1000) : val % 1000) / 100, 2);
+	if (i > *len) {
+		return -1;
+	}
+	*str += i;
+	*len -= i;
+
+	return *str - str_start;
+}
+
+static int build_complete_local_name(char *str, unsigned len) {
 	char *str_start = str;
 	int i;
 
-	strncpy(str, device_name, strlen(device_name));
-	len -= strlen(device_name);
-	str += strlen(device_name);
-	i = milli_to_decimal_str(str, len, mdeg_c);
-	len -= i;
-	str += i;
-	strncpy(str, "°C ", len);
-	len -= 4; // UTF-8 ° is two bytes
-	str += 4;
-	i = milli_to_decimal_str(str, len, m_perc_rh);
-	len -= i;
-	str += i;
-	strncpy(str, "%RH", len);
-	len -= 3;
-	str += 3;
+	if (!str_write_str(&str, &len, device_name)) {
+		return -1;
+	}
+	if(milli_to_decimal_str(&str, &len, mdeg_c) < 0) {
+		return -1;
+	}
+	if (!str_write_str(&str, &len, "°C ")) {
+		return -1;
+	}
+	if(milli_to_decimal_str(&str, &len, m_perc_rh) < 0) {
+		return -1;
+	}
+	if (!str_write_str(&str, &len, "%RH")) {
+		return -1;
+	}
 
 	return str - str_start;
 }
@@ -317,9 +344,6 @@ static void ble_tx(void *ctx) {
 
 	if (data_updated) {
 		data_updated = false;
-	//	msg[0] = snprintf(msg + 2, sizeof(msg) - 2, "%ld.%02ld°C %02lu.%02lu", mdeg_c / 1000, mdeg_c < 0 ? 1000 - mdeg_c % 1000 : mdeg_c % 1000, m_perc_rh / 1000, m_perc_rh % 1000) + 1;
-	//	msg[0] = snprintf(msg + 2, sizeof(msg) - 2, "miau :3") + 1;
-	//	msg[0] = snprintf(msg + 2, sizeof(msg) - 2, "%ld.%02ld°C %02u.%02u%%RH", mdeg_c / 1000, mdeg_c < 0 ? (1000 - mdeg_c % 1000) / 10 : (mdeg_c % 1000) / 10, m_perc_rh / 1000, (m_perc_rh % 1000) / 10) + 1;
 		msg[0] = build_complete_local_name(msg + 2, sizeof(msg) - 2) + 1;
 		msg[1] = 0x09;
 
