@@ -14,6 +14,7 @@
 
 #include "ble.h"
 #include "gpiod.h"
+#include "i2c.h"
 #include "os.h"
 #include "os_time.h"
 #include "strutil.h"
@@ -51,6 +52,8 @@
 
 #define MEASURE_INTERVAL_MS 30000
 #define BEACON_INTERVAL_MS 1000
+
+const char *device_name = "";
 
 static const struct rcc_clock_scale clock_32MHz = {
 	.pll_source = RCC_CFGR_PLLSRC_HSI16_CLK,
@@ -94,46 +97,55 @@ static void sht_off(void) {
 }
 
 static void i2c_init(void) {
-	nvic_set_priority(NVIC_I2C1_IRQ, 0);
-	nvic_enable_irq(NVIC_I2C1_IRQ);
+//	nvic_set_priority(NVIC_I2C1_IRQ, 0);
+//	nvic_enable_irq(NVIC_I2C1_IRQ);
 
 	rcc_periph_clock_enable(RCC_I2C1);
 
 	i2c_reset(I2C1);
 	i2c_peripheral_disable(I2C1);
 	i2c_set_speed(I2C1, i2c_speed_sm_100k, rcc_apb1_frequency / MHZ(1));
-//	i2c_enable_interrupt(I2C1, I2C_CR1_STOPIE | I2C_CR1_ADDRIE);
+	i2c_enable_interrupt(I2C1, I2C_CR1_ADDRIE | I2C_CR1_NACKIE | I2C_CR1_RXIE | I2C_CR1_TXIE);
 	i2c_set_digital_filter(I2C1, 3);
 	i2c_enable_analog_filter(I2C1);
 	i2c_peripheral_enable(I2C1);
 }
 
-static void sht_cmd(uint8_t cmd) {
-	i2c_transfer7(I2C1, SHT_ADDRESS, &cmd, 1, NULL, 0);	
+static int sht_cmd(uint8_t cmd) {
+	return i2c_transfer(I2C1, SHT_ADDRESS, &cmd, 1, NULL, 0);
+//	i2c_transfer7(I2C1, SHT_ADDRESS, &cmd, 1, NULL, 0);	
 }
 
-static int32_t sht_read_temperature_mdeg(void) {
+static int sht_read_temperature_mdeg(int32_t *ret) {
 	uint16_t res;
-	int32_t mdeg;
+	int err;
 
 	sht_cmd(SHT_CMD_MEASURE_TEMPERATURE);
 	os_delay(MS_TO_US(100));
-	i2c_transfer7(I2C1, SHT_ADDRESS, NULL, 0, &res, 2);
+	err = i2c_transfer(I2C1, SHT_ADDRESS, NULL, 0, &res, 2);
+	if (err < 0) {
+		return err;
+	}
+//	i2c_transfer7(I2C1, SHT_ADDRESS, NULL, 0, &res, 2);
 	res = ((res & 0xff) << 8) | ((res & 0xff00) >> 8);
-	mdeg = (175720LL * (int64_t)res) / 65536LL - 46850LL;
-	return mdeg;
+	*ret = (175720LL * (int64_t)res) / 65536LL - 46850LL;
+	return 0;
 }
 
-static uint32_t sht_read_humidity_m_perc(void) {
+static uint32_t sht_read_humidity_m_perc(uint32_t *ret) {
 	uint16_t res;
-	uint32_t m_perc_rh;
+	int err;
 
 	sht_cmd(SHT_CMD_MEASURE_HUMIDITY);
 	os_delay(MS_TO_US(100));
-	i2c_transfer7(I2C1, SHT_ADDRESS, NULL, 0, &res, 2);
+	err = i2c_transfer(I2C1, SHT_ADDRESS, NULL, 0, &res, 2);
+	if (err < 0) {
+		return err;
+	}
+//	i2c_transfer7(I2C1, SHT_ADDRESS, NULL, 0, &res, 2);
 	res = ((res & 0xff) << 8) | ((res & 0xff00) >> 8);
-	m_perc_rh = (125000ULL * (uint64_t)res) / 65536ULL - 6000ULL;
-	return m_perc_rh;
+	*ret = (125000ULL * (uint64_t)res) / 65536ULL - 6000ULL;
+	return 0;
 }
 
 static void nrf_on(void) {
@@ -222,8 +234,8 @@ static uint8_t hdr = BLE_HEADER(BLE_PDU_TYPE_ADV_NONCONN_IND, 0, 1, 0);
 
 static ble_mac_address_t mac_address = { 0x37, 0x13, 0xb7, 0x41, 0x80, 0x00 };
 
-int32_t mdeg_c;
-uint32_t m_perc_rh;
+int32_t mdeg_c = 0;
+uint32_t m_perc_rh = 0;
 
 os_task_t measure_task;
 os_task_t tx_task;
@@ -238,8 +250,14 @@ static void measure(void *ctx) {
 	os_delay(MS_TO_US(100));
 
 	gpiod_set(GPIO_LED_SHT, 1);
-	mdeg_c = sht_read_temperature_mdeg();
-	m_perc_rh = sht_read_humidity_m_perc();
+	if (sht_read_temperature_mdeg(&mdeg_c) < 0) {
+		gpiod_set(GPIO_LED_SHT, 0);
+		return;
+	}
+	if (sht_read_humidity_m_perc(&m_perc_rh) < 0) {
+		gpiod_set(GPIO_LED_SHT, 0);
+		return;
+	}
 	gpiod_set(GPIO_LED_SHT, 0);
 
 	sht_off();
@@ -257,7 +275,7 @@ static unsigned milli_to_decimal_str(char *str, unsigned max_len, long val) {
 	*str++ = '.';
 	len++;
 	max_len--;
-	len += long_to_str(str, max_len, (val < 0 ? (1000 - val % 1000) : val % 1000) / 10, 2);
+	len += long_to_str(str, max_len, (val < 0 ? (1000 - val % 1000) : val % 1000) / 100, 2);
 
 	return len;
 }
@@ -266,6 +284,9 @@ static unsigned build_complete_local_name(char *str, unsigned len) {
 	char *str_start = str;
 	int i;
 
+	strncpy(str, device_name, strlen(device_name));
+	len -= strlen(device_name);
+	str += strlen(device_name);
 	i = milli_to_decimal_str(str, len, mdeg_c);
 	len -= i;
 	str += i;
