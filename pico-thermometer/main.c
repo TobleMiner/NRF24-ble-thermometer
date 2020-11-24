@@ -222,7 +222,7 @@ static void nrf_ble_setup(void) {
 
 static uint8_t hdr = BLE_HEADER(BLE_PDU_TYPE_ADV_NONCONN_IND, 0, 1, 0);
 
-static ble_mac_address_t mac_address = { 0x37, 0x13, 0xb7, 0x41, 0x80, 0x00 };
+static ble_mac_address_t mac_address = { 0x00, 0x00, 0x00, 0x41, 0x80, 0x00 };
 
 int32_t mdeg_c = 0;
 uint32_t m_perc_rh = 0;
@@ -380,10 +380,23 @@ static void ble_tx(void *ctx) {
 	nrf_register_write(NRF_REG_CONFIG, 0x00); // crc disabled, powered down, ptx
 }
 
+#define U_ID_BASE 0x1FF80050
+
+#define U_ID1 (*(uint32_t*)(U_ID_BASE + 0x00))
+#define U_ID2 (*(uint32_t*)(U_ID_BASE + 0x04))
+#define U_ID3 (*(uint32_t*)(U_ID_BASE + 0x14))
+
+static void mac_address_init(void) {
+	uint32_t uid = U_ID3;
+
+	memcpy(mac_address, &uid, 3);
+}
+
 int main(void) {
 	watchdog_init();
 	clock_init();
 	gpiod_init();
+	mac_address_init();
 	os_init();
 	spi_init();
 	ce_lo();
