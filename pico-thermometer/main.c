@@ -141,7 +141,7 @@ static int sht_read_humidity_m_perc(uint32_t *ret) {
 	int err;
 
 	sht_cmd(SHT_CMD_MEASURE_HUMIDITY);
-	os_delay(MS_TO_US(100));
+	os_delay(MS_TO_US(50));
 	err = i2c_transfer(I2C1, SHT_ADDRESS, NULL, 0, (uint8_t*)&res, 2);
 	if (err < 0) {
 		return err;
@@ -240,18 +240,16 @@ static void measure(void *ctx) {
 	os_schedule_task_relative(&measure_task, measure, MS_TO_US(MEASURE_INTERVAL_MS), NULL);
 
 	sht_on();
-	os_delay(MS_TO_US(100));
-
 	gpiod_set(GPIO_LED_SHT, 1);
+	os_delay(MS_TO_US(20));
+	gpiod_set(GPIO_LED_SHT, 0);
+
 	if (sht_read_temperature_mdeg(&mdeg_c) < 0) {
-		gpiod_set(GPIO_LED_SHT, 0);
 		return;
 	}
 	if (sht_read_humidity_m_perc(&m_perc_rh) < 0) {
-		gpiod_set(GPIO_LED_SHT, 0);
 		return;
 	}
-	gpiod_set(GPIO_LED_SHT, 0);
 
 	sht_off();
 
