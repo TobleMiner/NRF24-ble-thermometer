@@ -3,6 +3,7 @@
 #include <libopencm3/stm32/i2c.h>
 
 #include "i2c.h"
+#include "os.h"
 
 #define I2C_TIMEOUT_ADDRESS_US 1000
 #define I2C_TIMEOUT_DATA_US 1000
