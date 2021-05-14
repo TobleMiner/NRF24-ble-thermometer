@@ -18,6 +18,7 @@
 #include "i2c.h"
 #include "os.h"
 #include "os_time.h"
+#include "sleep.h"
 #include "strutil.h"
 #include "util.h"
 
@@ -322,27 +323,24 @@ static int build_complete_local_name(char *str, unsigned len) {
 	return str - str_start;
 }
 
-static void nrf_reset(void) {
-	nrf_off();
-	os_delay(MS_TO_US(1000));
-	nrf_on();
-	os_delay(MS_TO_US(100));
-	nrf_ble_setup();
-}
-
 #define MAX_STATUS_POLLS 10
+
+static uint8_t ble_frame[32] = { 0 };
+static uint16_t ble_frame_len = 0;
 
 static void ble_tx(void *ctx);
 static void ble_tx(void *ctx) {
-	uint8_t frame[32] = { 0 };
 	uint8_t msg[32];
 	ble_channel_t* channel;
-	uint16_t len;
 	unsigned status_polls = 0;
 
 	(void)ctx;
 
 	os_schedule_task_relative(&tx_task, ble_tx, MS_TO_US(BEACON_INTERVAL_MS), NULL);
+
+	nrf_on();
+	os_delay(MS_TO_US(100));
+	nrf_ble_setup();
 
 	channel = ble_get_advertisement_channel();
 	nrf_register_write(NRF_REG_RF_CH, channel->frequency_mhz - 2400);
@@ -355,13 +353,11 @@ static void ble_tx(void *ctx) {
 		msg[0] = build_complete_local_name((char*)msg + 2, sizeof(msg) - 2) + 1;
 		msg[1] = 0x09;
 
-		len = ble_frame(frame, sizeof(frame), hdr, mac_address, msg, msg[0] + 2, channel);
-
-		nrf_register_write(NRF_REG_STATUS, 0x70); // Clear flags
-		nrf_cmd_multibyte(NRF_CMD_WRITE_TX_PAYLOAD, frame, len);
-	} else {
-		nrf_cmd(NRF_CMD_REUSE_TX_PAYLOAD); // Reuse last tx payload
+		ble_frame_len = ble_make_frame(ble_frame, sizeof(ble_frame), hdr, mac_address, msg, msg[0] + 2, channel);
 	}
+
+	nrf_register_write(NRF_REG_STATUS, 0x70); // Clear flags
+	nrf_cmd_multibyte(NRF_CMD_WRITE_TX_PAYLOAD, ble_frame, ble_frame_len);
 
 	ce_hi();
 	gpiod_set(GPIO_LED_BLE, 1);
@@ -372,12 +368,12 @@ static void ble_tx(void *ctx) {
 	while (!(nrf_get_status() & 0x20)) {
 		status_polls++;
 		if (status_polls >= MAX_STATUS_POLLS) {
-			nrf_reset();
 			break;
 		}
 		os_delay(MS_TO_US(10));
 	}
 	nrf_register_write(NRF_REG_CONFIG, 0x00); // crc disabled, powered down, ptx
+	nrf_off();
 }
 
 #define U_ID_BASE 0x1FF80050
@@ -402,10 +398,7 @@ int main(void) {
 	ce_lo();
 	sht_off();
 	i2c_init();
-
-	nrf_reset();
-
-	os_delay(MS_TO_US(1000));
+	sleep_init();
 
 	measure(NULL);
 	ble_tx(NULL);
