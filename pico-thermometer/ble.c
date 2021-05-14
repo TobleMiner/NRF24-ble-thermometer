@@ -47,7 +47,7 @@ static void ble_whiten(uint8_t *data, uint16_t len, uint8_t channel) {
 	}
 }
 
-uint16_t ble_frame(uint8_t *dst, uint16_t dst_len, ble_header_t hdr, ble_mac_address_t mac_addr, uint8_t *payload, uint8_t payload_len, ble_channel_t *channel) {
+uint16_t ble_make_frame(uint8_t *dst, uint16_t dst_len, ble_header_t hdr, ble_mac_address_t mac_addr, uint8_t *payload, uint8_t payload_len, ble_channel_t *channel) {
 	uint32_t crc;
 	uint8_t *dst_start = dst;
 

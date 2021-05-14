@@ -32,6 +32,6 @@ typedef uint8_t ble_header_t;
 #define BLE_PDU_TYPE_AUX_CHAIN_IND   0b0111
 #define BLE_PDU_TYPE_AUX_CONNECT_RSP 0b1000
 
-uint16_t ble_frame(uint8_t *dst, uint16_t dst_len, ble_header_t hdr, ble_mac_address_t mac_addr, uint8_t *payload, uint8_t payload_len, ble_channel_t *channel);
+uint16_t ble_make_frame(uint8_t *dst, uint16_t dst_len, ble_header_t hdr, ble_mac_address_t mac_addr, uint8_t *payload, uint8_t payload_len, ble_channel_t *channel);
 ble_channel_t *ble_get_advertisement_channel(void);
 ble_access_address_t *ble_get_access_address(void);
