@@ -27,5 +27,5 @@ void os_init(void);
 void os_schedule_task_relative(os_task_t *task, os_task_f cb, uint32_t us, void *ctx);
 void os_run(void);
 void os_delay(uint32_t us);
-uint32_t os_wait_flag_timeout(uint32_t *mmio, uint32_t mask, uint32_t us);
+uint32_t os_wait_flag_timeout(volatile uint32_t *mmio, uint32_t mask, uint32_t us);
 void os_inhibit_deep_sleep(bool inhibit);

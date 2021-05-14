@@ -286,7 +286,7 @@ void os_delay(uint32_t us) {
 	}
 }
 
-uint32_t os_wait_flag_timeout(uint32_t *mmio, uint32_t mask, uint32_t us) {
+uint32_t os_wait_flag_timeout(volatile uint32_t *mmio, uint32_t mask, uint32_t us) {
 	uint32_t ticks = US_TO_TICKS(us);
 
 	while (ticks) {
