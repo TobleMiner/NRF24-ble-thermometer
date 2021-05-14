@@ -218,10 +218,10 @@ void os_run() {
 	os_task_t *task = os_tasks;
 	os_task_t *next;
 
-	if (ticks_now >= last_run_timer_counter &&
-	    next_task_timer_counter != OS_TIMER_TOP) {
+	if (ticks_now >= last_run_timer_counter) {
 		// Fast path
-		if (ticks_now < next_task_timer_counter) {
+		if (ticks_now < next_task_timer_counter ||
+		    next_task_timer_counter == OS_TIMER_TOP) {
 			last_run_timer_counter = ticks_now;
 			timer_set_compare(next_task_timer_counter);
 			while (!timer_elapsed) {
