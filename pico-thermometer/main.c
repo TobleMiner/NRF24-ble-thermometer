@@ -87,7 +87,7 @@ static void watchdog_init(void) {
 static void spi_init(void) {
 	rcc_periph_clock_enable(RCC_SPI1);
 	spi_reset(SPI1);
-	spi_init_master(SPI1, SPI_CR1_BAUDRATE_FPCLK_DIV_16,
+	spi_init_master(SPI1, SPI_CR1_BAUDRATE_FPCLK_DIV_4,
 	                SPI_CR1_CPOL_CLK_TO_0_WHEN_IDLE,
 	                SPI_CR1_CPHA_CLK_TRANSITION_1, SPI_CR1_DFF_8BIT,
 	                SPI_CR1_MSBFIRST);
