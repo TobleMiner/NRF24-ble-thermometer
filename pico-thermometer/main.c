@@ -241,8 +241,9 @@ static void measure(void *ctx) {
 
 	sht_on();
 	gpiod_set(GPIO_LED_SHT, 1);
-	os_delay(MS_TO_US(20));
+	os_delay(MS_TO_US(1));
 	gpiod_set(GPIO_LED_SHT, 0);
+	os_delay(MS_TO_US(20));
 
 	if (sht_read_temperature_mdeg(&mdeg_c) < 0) {
 		return;
