@@ -29,3 +29,4 @@ void os_run(void);
 void os_delay(uint32_t us);
 uint32_t os_wait_flag_timeout(volatile uint32_t *mmio, uint32_t mask, uint32_t us);
 void os_inhibit_deep_sleep(bool inhibit);
+void os_inhibit_sleep(bool inhibit);

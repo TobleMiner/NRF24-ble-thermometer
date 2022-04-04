@@ -29,12 +29,20 @@ static os_task_t *os_tasks;
 static os_task_t *next_task;
 
 static bool inhibit_deep_sleep = false;
+static bool inhibit_sleep = false;
 
 void os_inhibit_deep_sleep(bool inhibit) {
 	inhibit_deep_sleep = inhibit;
 }
 
+void os_inhibit_sleep(bool inhibit) {
+	inhibit_sleep = inhibit;
+}
+
 static void do_sleep(uint32_t us) {
+	if (inhibit_sleep) {
+		return;
+	}
 	if (us >= OS_SLEEP_THRESHOLD_STOP_US && !inhibit_deep_sleep) {
 		sleep_enter_stop();
 /*
