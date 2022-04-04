@@ -138,20 +138,23 @@ static int sht_read_humidity_m_perc(uint32_t *ret) {
 	return 0;
 }
 
-static void nrf_on(void) {
-	gpiod_set(GPIO_NRF_POWER, 1);
-}
-
-static void nrf_off(void) {
-	gpiod_set(GPIO_NRF_POWER, 0);
-}
-
 static void ce_lo(void) {
 	gpiod_set(GPIO_NRF_CE, 0);
 }
 
 static void ce_hi(void) {
 	gpiod_set(GPIO_NRF_CE, 1);
+}
+
+static void nrf_on(void) {
+	gpiod_set(GPIO_SPI_NSS, 0);
+	gpiod_set(GPIO_NRF_POWER, 1);
+}
+
+static void nrf_off(void) {
+	ce_lo();
+	gpiod_set(GPIO_NRF_POWER, 0);
+	gpiod_set(GPIO_SPI_NSS, 1);
 }
 
 static void nrf_register_write(uint8_t reg, uint8_t val) {
@@ -386,6 +389,7 @@ int main(void) {
 	ce_lo();
 	sht_off();
 	i2c_init();
+	nrf_off();
 
 	measure(NULL);
 	ble_tx(NULL);
