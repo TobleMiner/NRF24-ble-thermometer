@@ -77,9 +77,18 @@ void os_init() {
 static volatile bool timer_elapsed = false;
 
 void OS_TIMER_IRQ_HANDLER(void) {
-	lptimer_clear_flag(OS_TIMER, LPTIM_ICR_ARRMCF);
-	lptimer_clear_flag(OS_TIMER, LPTIM_ICR_CMPMCF);
-	timer_elapsed = true;
+	if (lptimer_get_flag(OS_TIMER, LPTIM_ICR_ARRMCF)) {
+		timer_elapsed = true;
+		lptimer_clear_flag(OS_TIMER, LPTIM_ICR_ARRMCF);
+	}
+	if (lptimer_get_flag(OS_TIMER, LPTIM_ICR_CMPMCF)) {
+		timer_elapsed = true;
+		lptimer_clear_flag(OS_TIMER, LPTIM_ICR_CMPMCF);
+	}
+	if (lptimer_get_flag(OS_TIMER, LPTIM_ICR_CMPOKCF)) {
+		lptimer_clear_flag(OS_TIMER, LPTIM_ICR_CMPOKCF);
+		lptimer_disable_irq(OS_TIMER, LPTIM_ICR_CMPOKCF);
+	}
 }
 
 static void os_sync_time(void) {
@@ -220,8 +229,19 @@ void os_schedule_task_relative(os_task_t *task, os_task_f cb, uint32_t us, void 
 static void timer_set_compare(uint16_t val) {
 	__disable_irq();
 	lptimer_clear_flag(OS_TIMER, LPTIM_ICR_CMPOKCF);
+	lptimer_enable_irq(OS_TIMER, LPTIM_ICR_CMPOKCF);
 	lptimer_set_compare(OS_TIMER, val);
-	while (!lptimer_get_flag(OS_TIMER, LPTIM_ICR_CMPOKCF));
+	while (!lptimer_get_flag(OS_TIMER, LPTIM_ICR_CMPOKCF)) {
+		if (!inhibit_sleep) {
+			if (inhibit_deep_sleep) {
+				sleep_enter();
+			} else {
+				sleep_enter_stop();
+			}
+		}
+	}
+	lptimer_disable_irq(OS_TIMER, LPTIM_ICR_CMPOKCF);
+	lptimer_clear_flag(OS_TIMER, LPTIM_ICR_CMPOKCF);
 	timer_elapsed = lptimer_get_counter(OS_TIMER) >= val;
 	__enable_irq();
 }
@@ -286,7 +306,7 @@ void os_delay(uint32_t us) {
 			ticks_partial = OS_TIMER_TOP - 1;
 		}
 		if (OS_TIMER_TOP - ticks_partial < ticks_now) {
-			ticks_partial =  OS_TIMER_TOP - ticks_now;
+			ticks_partial = OS_TIMER_TOP - ticks_now;
 		}
 
 		os_delay_ticks(ticks_now, ticks_partial);
