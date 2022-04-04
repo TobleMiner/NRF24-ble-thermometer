@@ -392,12 +392,13 @@ int main(void) {
 	clock_init();
 	gpiod_init();
 	mac_address_init();
+	/* Run sleep init before os_init to enable PWR clock domain */
+	sleep_init();
 	os_init();
 	spi_init();
 	ce_lo();
 	sht_off();
 	i2c_init();
-	sleep_init();
 
 	measure(NULL);
 	ble_tx(NULL);
