@@ -6,9 +6,9 @@
 #include "os_time.h"
 #include "util.h"
 
-#define US_TO_TICKS(us) (DIV_ROUND_UP(us, 1000))
+#define US_TO_TICKS(us) (DIV_ROUND_UP(us, 977))
 #define MS_TO_TICKS(ms) US_TO_TICKS((ms) * 1000)
-#define TICKS_TO_US(ticks) ((ticks) * 1000)
+#define TICKS_TO_US(ticks) ((ticks) * 977)
 
 typedef void (*os_task_f)(void *ctx);
 

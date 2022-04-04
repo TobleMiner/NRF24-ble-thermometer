@@ -2,6 +2,7 @@
 
 #include <libopencm3/cm3/nvic.h>
 #include <libopencm3/stm32/lptimer.h>
+#include <libopencm3/stm32/pwr.h>
 #include <libopencm3/stm32/rcc.h>
 #include <libopencmsis/core_cm3.h>
 
@@ -46,12 +47,16 @@ static void do_sleep(uint32_t us) {
 }
 
 void os_init() {
-	// 1ms resolution RTOS timer
+	// 0.977ms resolution RTOS timer
 	rcc_periph_clock_enable(OS_TIMER_RCC);
 	rcc_periph_reset_pulse(OS_TIMER_RST);
-	rcc_osc_on(RCC_LSI);
-	rcc_set_peripheral_clk_sel(LPTIM1, RCC_CCIPR_LPTIM1SEL_LSI);
-	// 32kHz LSI / 32 = 1kHz
+	pwr_disable_backup_domain_write_protect();
+	RCC_CSR |= RCC_CSR_LSEDRV_HIGHEST << RCC_CSR_LSEDRV_SHIFT;
+	rcc_osc_on(RCC_LSE);
+	pwr_enable_backup_domain_write_protect();
+	rcc_wait_for_osc_ready(RCC_LSE);
+	rcc_set_peripheral_clk_sel(LPTIM1, RCC_CCIPR_LPTIM1SEL_LSE);
+	// 32.768kHz LSE / 32 = 1.024kHz
 	lptimer_set_internal_clock_source(OS_TIMER);
 	lptimer_set_prescaler(OS_TIMER, LPTIM_CFGR_PRESC_32);
 	lptimer_enable(OS_TIMER);
