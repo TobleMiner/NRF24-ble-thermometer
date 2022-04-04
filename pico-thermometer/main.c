@@ -234,15 +234,16 @@ static void measure(void *ctx) {
 	os_delay(MS_TO_US(20));
 
 	if (sht_read_temperature_mdeg(&mdeg_c) < 0) {
-		return;
+		goto out;
 	}
 	if (sht_read_humidity_m_perc(&m_perc_rh) < 0) {
-		return;
+		goto out;
 	}
 
-	sht_off();
-
 	data_updated = true;
+
+out:
+	sht_off();
 }
 
 static bool str_write(char **str, unsigned *len, const void *data, unsigned data_len) {
