@@ -198,7 +198,6 @@ static uint8_t nrf_get_status(void) {
 }
 
 static void nrf_ble_setup(void) {
-	nrf_register_write(NRF_REG_CONFIG, 0x00); // crc disabled, powered down, ptx
 	nrf_register_write(NRF_REG_EN_AA, 0x00); // Disable auto ack
 	nrf_register_write(NRF_REG_RX_PW_P0, 0x20); // Enable RX pipe 0
 	nrf_register_write(NRF_REG_EN_RXADDR, 0x01); // Enable RX 0
@@ -313,43 +312,51 @@ static int build_complete_local_name(char *str, unsigned len) {
 
 #define MAX_STATUS_POLLS 10
 
-static uint8_t ble_frame[32] = { 0 };
-static uint16_t ble_frame_len = 0;
+static uint8_t ble_data[32] = "  unitialized";
+static unsigned int ble_data_len = 13;
 
 static void ble_tx(void *ctx);
 static void ble_tx(void *ctx) {
-	uint8_t msg[32];
+	uint8_t ble_frame[32];
+	uint16_t ble_frame_len;
+
 	ble_channel_t* channel;
 	unsigned status_polls = 0;
+	uint32_t i;
 
 	(void)ctx;
 
 	os_schedule_task_relative(&tx_task, ble_tx, MS_TO_US(BEACON_INTERVAL_MS), NULL);
 
-	nrf_on();
-	os_delay(MS_TO_US(100));
-	nrf_ble_setup();
-
 	channel = ble_get_advertisement_channel();
-	nrf_register_write(NRF_REG_RF_CH, channel->frequency_mhz - 2400);
-
-	nrf_register_write(NRF_REG_CONFIG, 0x02); // crc disabled, powered up, ptx
-	os_delay(MS_TO_US(10));
 
 	if (data_updated) {
 		data_updated = false;
-		msg[0] = build_complete_local_name((char*)msg + 2, sizeof(msg) - 2) + 1;
-		msg[1] = 0x09;
+		ble_data[0] = build_complete_local_name((char*)ble_data + 2, sizeof(ble_data) - 2) + 1;
+		ble_data[1] = 0x09;
 
-		ble_frame_len = ble_make_frame(ble_frame, sizeof(ble_frame), hdr, mac_address, msg, msg[0] + 2, channel);
 	}
 
-	nrf_register_write(NRF_REG_STATUS, 0x70); // Clear flags
+	ble_frame_len = ble_make_frame(ble_frame, sizeof(ble_frame), hdr, mac_address, ble_data, ble_data[0] + 2, channel);
+
+	nrf_on();
+	os_delay(MS_TO_US(100));
+
+	nrf_ble_setup();
+	nrf_register_write(NRF_REG_RF_CH, channel->frequency_mhz - 2400);
 	nrf_cmd_multibyte(NRF_CMD_WRITE_TX_PAYLOAD, ble_frame, ble_frame_len);
+
+	nrf_register_write(NRF_REG_CONFIG, 0x02); // crc disabled, powered up, ptx
+	os_delay(1500);
+
+	nrf_register_write(NRF_REG_STATUS, 0x70); // Clear flags
 
 	ce_hi();
 	gpiod_set(GPIO_LED_BLE, 1);
-	os_delay(MS_TO_US(1));
+	for (i = 0; i < 100; i++) {
+		__asm__ volatile("" : "+g" (i) : :);
+	}
+//	os_delay(MS_TO_US(1));
 	gpiod_set(GPIO_LED_BLE, 0);
 	ce_lo();
 
@@ -358,9 +365,8 @@ static void ble_tx(void *ctx) {
 		if (status_polls >= MAX_STATUS_POLLS) {
 			break;
 		}
-		os_delay(MS_TO_US(10));
+		os_delay(MS_TO_US(1));
 	}
-	nrf_register_write(NRF_REG_CONFIG, 0x00); // crc disabled, powered down, ptx
 	nrf_off();
 }
 
