@@ -2,6 +2,9 @@ PROJECT = pico-thermometer
 BUILD_DIR = bin
 
 CFILES = $(wildcard *.c)
+LDFLAGS += -Wl,--print-memory-usage
+CFLAGS += -flto
+LDFLAGS += -flto
 OPT = -Os
 
 # TODO - you will need to edit these two lines!
