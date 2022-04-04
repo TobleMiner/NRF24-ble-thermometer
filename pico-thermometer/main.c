@@ -59,23 +59,10 @@
 
 const char *device_name = "";
 
-static const struct rcc_clock_scale clock_32MHz = {
-	.pll_source = RCC_CFGR_PLLSRC_HSI16_CLK,
-	.pll_mul = RCC_CFGR_PLLMUL_MUL4,
-	.pll_div = RCC_CFGR_PLLDIV_DIV2,
-	.flash_waitstates = FLASH_ACR_LATENCY_1WS,
-	.voltage_scale = PWR_SCALE1,
-	.hpre = RCC_CFGR_HPRE_NODIV,
-	.ppre1 = RCC_CFGR_PPRE1_NODIV,
-	.ppre2 = RCC_CFGR_PPRE2_NODIV,
-	.ahb_frequency = MHZ(32),
-	.apb1_frequency = MHZ(32),
-	.apb2_frequency = MHZ(32),
-	.msi_range = 0b101
-};
-
 static void clock_init(void) {
-	rcc_clock_setup_pll(&clock_32MHz);
+	rcc_osc_on(RCC_HSI16);
+	rcc_wait_for_osc_ready(RCC_HSI16);
+	rcc_set_sysclk_source(RCC_HSI16);
 	RCC_CFGR |= RCC_CFGR_STOPWUCK_HSI16;
 }
 
