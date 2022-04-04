@@ -205,8 +205,6 @@ static void nrf_ble_setup(void) {
 	nrf_register_write(NRF_REG_SETUP_AW, 0x02); // 4 byte addresses
 	nrf_register_write(NRF_REG_SETUP_RETR, 0x00); // No retransmissions
 	nrf_register_write(NRF_REG_RF_SETUP, 0x06); // 1Mbit/s, 0dBm tx power
-	nrf_register_write(NRF_REG_FEATURE, 0x00); // Disable ShockBurst features
-	nrf_register_write(NRF_REG_DYNPD, 0x00); // No dynamic payloads
 	nrf_cmd_multibyte(NRF_CMD_WRITE_REGISTER | NRF_REG_RX_ADDR_P0, *ble_get_access_address(), sizeof(ble_access_address_t)); // Set RX address
 	nrf_cmd_multibyte(NRF_CMD_WRITE_REGISTER | NRF_REG_TX_ADDR, *ble_get_access_address(), sizeof(ble_access_address_t)); // Set TX address
 }
