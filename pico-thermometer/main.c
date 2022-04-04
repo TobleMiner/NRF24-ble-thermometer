@@ -113,7 +113,7 @@ static int sht_read_temperature_mdeg(int32_t *ret) {
 	int err;
 
 	sht_cmd(SHT_CMD_MEASURE_TEMPERATURE);
-	os_delay(MS_TO_US(100));
+	os_delay(MS_TO_US(85));
 	err = i2c_transfer(I2C1, SHT_ADDRESS, NULL, 0, (uint8_t*)&res, 2);
 	if (err < 0) {
 		return err;
@@ -128,7 +128,7 @@ static int sht_read_humidity_m_perc(uint32_t *ret) {
 	int err;
 
 	sht_cmd(SHT_CMD_MEASURE_HUMIDITY);
-	os_delay(MS_TO_US(50));
+	os_delay(MS_TO_US(30));
 	err = i2c_transfer(I2C1, SHT_ADDRESS, NULL, 0, (uint8_t*)&res, 2);
 	if (err < 0) {
 		return err;
