@@ -18,7 +18,7 @@
 #define OS_TIMER_TOP 0xFFFF
 
 #define OS_SLEEP_THRESHOLD_LOW_POWER_US 1000
-#define OS_SLEEP_THRESHOLD_STOP_US     10000
+#define OS_SLEEP_THRESHOLD_STOP_US       500
 
 static uint32_t last_timer_counter_sync = 0;
 static os_time_t last_os_time = { 0, 0 };
